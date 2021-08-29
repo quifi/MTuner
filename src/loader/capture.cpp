@@ -1218,6 +1218,9 @@ void Capture::buildAnalyzeData(uintptr_t _symResolver)
 	//resolve address concurrently
 	std::vector<SymbolAddressIDInfoMutablePair> addressIDInfoCacheList;
 	addressIDInfoCacheList.insert(addressIDInfoCacheList.end(), addressIDInfoCacheMap.begin(), addressIDInfoCacheMap.end());
+	//sort by address, so that addresses of same module processed by different threads, but not quite clear why this is better
+	std::sort(addressIDInfoCacheList.begin(), addressIDInfoCacheList.end(),
+		[](const SymbolAddressIDInfoMutablePair& x, const SymbolAddressIDInfoMutablePair& y) { return x.first < y.first; });
 	QtConcurrent::blockingMap(addressIDInfoCacheList.begin(), addressIDInfoCacheList.end(), [_symResolver](SymbolAddressIDInfoMutablePair& infoPair)
 	{
 		infoPair.second.id = rdebug::symbolResolverGetAddressID(_symResolver, infoPair.first, &infoPair.second.isMTunerDLL);
