@@ -1184,6 +1184,14 @@ bool Capture::loadModuleInfo(BinLoader& _loader, uint64_t _fileSize)
 	return symSize == 0;
 }
 
+struct SymbolAddressIDInfo
+{
+	uint64_t id;
+	bool isMTunerDLL;
+};
+
+typedef std::unordered_map<uint64_t, SymbolAddressIDInfo> SymbolAddressIDInfoMap;
+
 //--------------------------------------------------------------------------
 /// Builds stack trace trees and group operations by type/call stack/size
 //--------------------------------------------------------------------------
@@ -1199,6 +1207,8 @@ void Capture::buildAnalyzeData(uintptr_t _symResolver)
 	uint32_t nextProgressPoint = 0;
 	uint32_t numOpsOver100 = numStackTraces/100;
 	uint32_t idx = 0;
+
+	SymbolAddressIDInfoMap addressIDInfoCacheMap;
 
 	while (it != end)
 	{
@@ -1218,8 +1228,19 @@ void Capture::buildAnalyzeData(uintptr_t _symResolver)
 
 		for (int i=0; i<numFrames; ++i)
 		{
-			bool currentSymbolInMTunerDLL = true;
-			st->m_entries[i + numFrames] = rdebug::symbolResolverGetAddressID(_symResolver, st->m_entries[i], &currentSymbolInMTunerDLL);
+			SymbolAddressIDInfo info;
+			SymbolAddressIDInfoMap::const_iterator infoIt = addressIDInfoCacheMap.find(st->m_entries[i]);
+			if (infoIt == addressIDInfoCacheMap.end())
+			{
+				info.id = rdebug::symbolResolverGetAddressID(_symResolver, st->m_entries[i], &info.isMTunerDLL);
+				addressIDInfoCacheMap.insert(std::make_pair(st->m_entries[i], info));
+			}
+			else
+			{
+				info = infoIt->second;
+			}
+			bool currentSymbolInMTunerDLL = info.isMTunerDLL;
+			st->m_entries[i + numFrames] = info.id;
 
 			if (!currentSymbolInMTunerDLL)
 				countSkippable = false;
