@@ -11,6 +11,7 @@
 #include <rbase/inc/path.h>
 #include <rbase/inc/winchar.h>
 #include <rdebug/inc/rdebug.h>
+#include <QtConcurrent/QtConcurrent>
 
 #include <type_traits>
 
@@ -1191,6 +1192,7 @@ struct SymbolAddressIDInfo
 };
 
 typedef std::unordered_map<uint64_t, SymbolAddressIDInfo> SymbolAddressIDInfoMap;
+typedef std::pair<uint64_t, SymbolAddressIDInfo> SymbolAddressIDInfoMutablePair;
 
 //--------------------------------------------------------------------------
 /// Builds stack trace trees and group operations by type/call stack/size
@@ -1199,16 +1201,40 @@ void Capture::buildAnalyzeData(uintptr_t _symResolver)
 {
 	RTM_ASSERT(_symResolver != 0, "Invalid symbol resolver!");
 
-	// get stack traces unique IDs
-	rtm_vector<StackTrace*>::iterator it  = m_stackTraces.begin();
+	SymbolAddressIDInfoMap addressIDInfoCacheMap;
+
+	//first pass, read all addresses into cache map
+	for (StackTrace* st : m_stackTraces)
+	{
+		int numFrames = (int)st->m_numEntries;
+
+		SymbolAddressIDInfo emptyInfo = {};
+		for (int i = 0; i < numFrames; ++i)
+		{
+			addressIDInfoCacheMap.insert(std::make_pair(st->m_entries[i], emptyInfo));
+		}
+	}
+
+	//resolve address concurrently
+	std::vector<SymbolAddressIDInfoMutablePair> addressIDInfoCacheList;
+	addressIDInfoCacheList.insert(addressIDInfoCacheList.end(), addressIDInfoCacheMap.begin(), addressIDInfoCacheMap.end());
+	QtConcurrent::blockingMap(addressIDInfoCacheList.begin(), addressIDInfoCacheList.end(), [_symResolver](SymbolAddressIDInfoMutablePair& infoPair)
+	{
+		infoPair.second.id = rdebug::symbolResolverGetAddressID(_symResolver, infoPair.first, &infoPair.second.isMTunerDLL);
+	});
+	for (const SymbolAddressIDInfoMap::value_type& infoPair : addressIDInfoCacheList)
+	{
+		addressIDInfoCacheMap[infoPair.first] = infoPair.second;
+	}
+
+	// second pass, get stack traces unique IDs
+	rtm_vector<StackTrace*>::iterator it = m_stackTraces.begin();
 	rtm_vector<StackTrace*>::iterator end = m_stackTraces.end();
 
 	const uint32_t numStackTraces = (uint32_t)m_stackTraces.size();
 	uint32_t nextProgressPoint = 0;
 	uint32_t numOpsOver100 = numStackTraces/100;
 	uint32_t idx = 0;
-
-	SymbolAddressIDInfoMap addressIDInfoCacheMap;
 
 	while (it != end)
 	{
@@ -1228,19 +1254,13 @@ void Capture::buildAnalyzeData(uintptr_t _symResolver)
 
 		for (int i=0; i<numFrames; ++i)
 		{
-			SymbolAddressIDInfo info;
 			SymbolAddressIDInfoMap::const_iterator infoIt = addressIDInfoCacheMap.find(st->m_entries[i]);
 			if (infoIt == addressIDInfoCacheMap.end())
 			{
-				info.id = rdebug::symbolResolverGetAddressID(_symResolver, st->m_entries[i], &info.isMTunerDLL);
-				addressIDInfoCacheMap.insert(std::make_pair(st->m_entries[i], info));
+				RTM_ASSERT(false, "Address not resolved!");
 			}
-			else
-			{
-				info = infoIt->second;
-			}
-			bool currentSymbolInMTunerDLL = info.isMTunerDLL;
-			st->m_entries[i + numFrames] = info.id;
+			bool currentSymbolInMTunerDLL = infoIt->second.isMTunerDLL;
+			st->m_entries[i + numFrames] = infoIt->second.id;
 
 			if (!currentSymbolInMTunerDLL)
 				countSkippable = false;
