@@ -394,8 +394,8 @@ QVariant TreeItem::data(int _column) const
 		{
 			case Header::Name:		return m_func;
 			case Header::Module:	return m_module;
-			case Header::Usage:		return m_tree->m_memUsage		? ((float(m_tree->m_memUsage)		* 100.0f) / float(m_root->m_memUsage))		: 0;
-			case Header::PeakUsage:	return m_tree->m_memUsagePeak	? ((float(m_tree->m_memUsagePeak)	* 100.0f) / float(m_root->m_memUsagePeak))	: 0;
+			case Header::Usage:		return formatPercentageView(m_tree->m_memUsage, m_root->m_memUsage);
+			case Header::PeakUsage:	return formatPercentageView(m_tree->m_memUsagePeak, m_root->m_memUsagePeak);
 			case Header::Allocs:	return formatPercentageView(m_tree->m_opCount[rtm::StackTraceTree::Alloc  ], m_root->m_opCount[rtm::StackTraceTree::Alloc  ]);
 			case Header::Frees:		return formatPercentageView(m_tree->m_opCount[rtm::StackTraceTree::Free   ], m_root->m_opCount[rtm::StackTraceTree::Free   ]);
 			case Header::Reallocs:	return formatPercentageView(m_tree->m_opCount[rtm::StackTraceTree::Realloc], m_root->m_opCount[rtm::StackTraceTree::Realloc]);
@@ -426,7 +426,7 @@ int TreeItem::row() const
 
 void ProgressBarDelegate::paint(QPainter* _painter, const QStyleOptionViewItem& _option, const QModelIndex& _index) const
 {
-	if ((_index.column() == 2) || (_index.column() == 3))
+	if (false)	//((_index.column() == 2) || (_index.column() == 3))
 	{
 		float progress = _index.data().toFloat();
 
