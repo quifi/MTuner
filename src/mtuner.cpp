@@ -209,11 +209,11 @@ void MTuner::setLoadingProgress(float _progress, const QString &_message)
 
 	int value = m_loadingProgressBar->value();
 	int newVal = _progress*100;
-	if (newVal != value)
+	if (newVal/100 != value/100)
 	{
 		m_loadingProgressBar->setValue(newVal);
 		setStatusBarText(_message);
-		QApplication::processEvents(QEventLoop::AllEvents,1);
+		//QApplication::processEvents(QEventLoop::AllEvents,1);
 	}
 }
 
